@@ -1,0 +1,395 @@
+---
+title: "Simplification and Revision of Ambrose Revision of NMDS Run 2/6/20"
+author: "Curtis C. Bohlen, Casco Bay Estuary Partnership"
+date: "3/22/2021"
+output:
+  html_document:
+    toc: true
+    toc_depth: 3
+    toc_float: true
+    fig_width: 5
+    fig_height: 4
+---
+
+<img
+    src="https://www.cascobayestuary.org/wp-content/uploads/2014/04/logo_sm.jpg"
+    style="position:absolute;top:10px;right:50px;" />
+
+
+# Load Libraries
+I simplified library calls here.  Many of the libraries are included in the 
+"tidyverse", and I don't usually use datatable, etc.  others appeear to not be 
+needed in the final analyses
+
+Note that you have to load MASS before the Tidyverse, because it has a function
+named `select`, which messes with many standard dplyr workflows, in ways that
+are not alwqys easy to identify.
+```{r}
+library(MASS)
+library(tidyverse)
+library(vegan)
+#library(labdsv)
+#library(data.table)
+library(readxl)
+#library(ggpubr)
+#library(emmeans)
+library(mvtnorm)
+
+
+#library(knitr)
+#library(testthat)
+library(reshape2) #need to turn data from long to wide
+#library(glmmTMB) #glmmTMB
+#library(grid) #needed to plot envfit vectors
+```
+
+```{r}
+citation("vegan")
+```
+
+# Set Graphics Theme
+This sets `ggplot()`graphics for no background, no grid lines, etc. in a clean
+format suitable for (some) publications.  You can get a lot fancier here with
+setting graphic defaults, but this is a good starting point.
+```{r}
+theme_set(theme_classic())
+```
+
+# Folder References
+```{r}
+data_folder <- "Original_Data"
+```
+
+# Input Data
+I revised the folder paths to fit with how I had files organized.  I also 
+dropped the call to `data.table()`, as unnecessary, as I work mostly with
+tibbles.
+
+##  Environmental Data
+This code generates a fair number of warnings about date conversions, but these
+are for the time variable, which is inconsistently coded in the Excel file, and
+not a key part of the analysis here.
+```{r}
+
+filename.in <- "penob.station.data EA 3.12.20.xlsx"
+file_path <- file.path(data_folder, filename.in)
+station_data <- read_excel(file_path, 
+                           sheet="NMDS Happy", col_types = c("skip", "date", 
+                                              "numeric", "text", "numeric", 
+                                              "numeric", "numeric", "numeric", 
+                                              "numeric", "numeric", "numeric", 
+                                              "numeric", "numeric", "numeric", 
+                                              "numeric", "numeric", "numeric", 
+                                              "numeric", "numeric", "numeric", 
+                                              "numeric", "numeric", "numeric", 
+                                              "numeric", "numeric", "numeric", 
+                                              "numeric", "numeric", "numeric", 
+                                              "numeric", "numeric", "numeric", 
+                                              "numeric", "numeric", "numeric", 
+                                              "numeric", "numeric", "numeric", 
+                                              "numeric", "numeric", "numeric", 
+                                              "numeric", "numeric", "numeric", 
+                                              "numeric", "numeric", "numeric", 
+                                              "numeric", "numeric", "numeric", 
+                                              "numeric", "numeric", "numeric", 
+                                              "numeric", "numeric", "numeric", 
+                                              "numeric", "numeric", "numeric", 
+                                              "numeric", "numeric", "text")) %>%
+  rename_with(~ gsub(" ", "_", .x)) %>%
+  rename_with(~ gsub("\\.", "_", .x))
+station_data
+```
+
+## Composition Data
+```{r}
+filename.in <- "Penobscot_Zooplankton and field data_EA_2.13.20.xlsx"
+file_path <- file.path(data_folder, filename.in)
+zoopl <- read_excel(file_path,
+                    sheet = "NMDS Happy",
+                    col_types = c("date", 
+                                  "text", "numeric", "numeric", "text", 
+                                  "text", "text", "text", "text", "text", 
+                                  "text", "numeric", "text", "text", 
+                                  "numeric", "numeric", "numeric", 
+                                  "text", "text", "text", "numeric", 
+                                  "numeric", "numeric", "numeric")) %>%
+rename_with(~ gsub(" ", "_", .x)) %>%
+  select(-c(`...20`:`...24`))
+zoopl
+```
+
+## Turn Data from Long to Wide
+I no longer use the `reshape2` package (`dcast()` is from `reshape2`) for this
+type of data reorganization.  Grouped tibbles in the tidyverse work well instead
+of the `aggregate()` command.  For pivoting long to wide, the tidyverse's newer
+`pivot_wider()` function is fairly intuitive. But this code still works, so
+there is no reason to change it.
+
+This step generates a total abundance for each taxa by site and date.  I believe 
+this was necessary because the "raw" data reflected sampling of plankton one
+microscope slide at a time....
+```{r}
+zoopl2 <- aggregate(CORRECTED_PERCENT_ABUNDANCE ~ NAME + DATE + STATION, 
+                    data=zoopl, FUN=sum)
+zoopl2
+```
+
+This step pivots the table to "wide" format, with a column for each taxa. 
+
+It is interesting that this step is necessary.  Presumably it reflects the
+matrix format used for traditional community analysis, especially vegetation
+analysis.  A matrix format was used by a lot of historically important community 
+analysis code (like DECORANA).
+```{r}
+zoopw <- dcast(zoopl2, DATE + STATION ~ NAME, drop = TRUE, fill = 0)
+zoopw
+```
+
+## Matrix of Species for `vegan`
+The `vegan` package likes to work with a matrix of species occurrences.
+```{r}
+CDATA <- zoopw[,-c(1,2)]
+
+```
+
+We put everything else into a `header_data` file. The environmental data will go
+into a third data frame.
+
+Just remember when you drop a row from one you'll have to drop from all three 
+data frames! 
+```{r}
+header_data <- data.frame(station = factor(zoopw$STATION),
+                          date = zoopw$DATE,
+                          year = factor(substr(zoopw$DATE, 1,4)),
+                          month = factor(substr(zoopw$DATE, 6, 7)), 
+                          day = factor(substr(zoopw$DATE, 9, 10)))
+header_data
+```
+
+Data sanity checks.  We should have no NAs, and row sums should all be 1, at
+least within reasonable rounding error.  
+```{r}
+anyNA(CDATA)
+
+plot(rowSums(CDATA))
+```
+
+# NDMS Analyses 
+## Version 1:  Autotransform is FALSE
+```{r}
+NMDSE <- metaMDS(CDATA, autotransform = FALSE, k = 2, trymax = 75)
+NMDSE
+```
+
+## Plot
+```{r}
+plot(NMDSE, type = 't')
+```
+
+#Adding Environmental Data
+```{r}
+envNMDS <- data.frame(NMDSE$points) %>% 
+  rownames_to_column(var = "sample") %>%
+  mutate(station = header_data$station) %>%
+  mutate(month = header_data$month) %>%
+  mutate(year = header_data$year) %>%
+    mutate(temp = station_data$ave_temp_c) %>%
+    mutate(sal = station_data$ave_sal_psu) %>%
+    mutate(turb = station_data$ave_turb_ntu) %>%
+    mutate(DOsat = station_data$ave_DO_Saturation) %>%
+    mutate(chl = station_data$ave_chl_microgperl) %>%
+    mutate(fish = station_data$Fish) %>%
+    mutate(RH = station_data$Herring)
+envNMDS
+```
+
+# Using `envfit` to Estimate Correlations
+I revised your code to call on the same ordination you were using elsewhere.
+You were calling on another NMDS object.  I believe it was one produced 
+by `isoMDS()` from `MASS`, not `metaMDS()` from `vegan`.  I'm not sure why that
+happened or whether it matters.
+
+
+```{r}
+ef <- envfit(NMDSE, envNMDS[,c(4:11,13)], permu = 999, na.rm = TRUE)
+ef
+```
+I note 13 observations deleted due to missingness.  Most of those must be the
+2013 data.  Presumably, they were deleted because they lack some of the
+predictor variables.  
+
+I also observe that Year is included in the model, but is NOT 
+significant.  However, dropping Year from the model has no effect on the 
+vector NMDS loading estimates, or their R squared values, so it does not matter.
+
+# Extracting Vector Information 
+The `envfit()` help page says the object returned by the function is a LIST with 
+three components.
+```{r}
+class(ef)
+names(ef)
+```
+
+The `ef` object is a `envfit` object, with C3 class, with three named 
+slots. The vector information we need to plot the environment arrows is
+available in `vectors`.  But that object is itself also an S3 Object, with
+several named items.
+
+```{r}
+v <- ef$vectors
+class(v)
+names(v)
+```
+
+The help page for `envfit()` tells us that the information we need for the 
+direction of the arrows is in the `arrows` component.  We are told that `arrows 
+contains "Arrow endpoints from vectorfit. The arrows are scaled to unit length."
+
+```{r}
+class(v$arrows)
+v$arrows
+```
+
+The information we need to determine the magnitude of those vectors is buried 
+in the `r` component of the `vectors` component. We scale each of the arrows 
+by the square root of the related  r squared value. (Following the strategy in 
+the code you shared with me).
+```{r}
+arrows <- v$arrows
+rsq    <- v$r
+scaled_arrows <- as_tibble(arrows*sqrt(rsq)) %>%  # I am actually a bit surprized this works....
+  mutate(parameter = rownames(arrows))
+```
+
+# Plotting `envfit()` Information
+```{r}
+plot_data <- data.frame(NMDSE$points) %>%
+  rownames_to_column(var = "sample") %>%
+  mutate(station = header_data$station) %>%
+  mutate(month = header_data$month) %>%
+  mutate(year = header_data$year)
+```
+
+```{r}
+plt <- ggplot(data = plot_data, aes(MDS1, MDS2)) + 
+  geom_point(aes(color = station), size = 2.5) +
+  geom_segment(data=scaled_arrows,  
+               mapping = aes(x=0,xend=NMDS1,y=0,yend=NMDS2),
+               arrow = arrow(length = unit(0.5, "cm")) ,colour="grey") + 
+  geom_text(data=scaled_arrows, 
+            mapping = aes(x=NMDS1,y=NMDS2,label=parameter),
+            size=5, nudge_x = -0.075, nudge_y = -0.075, hjust = 0)+
+  scale_color_viridis_d(option = 'C', name = 'Station') +
+  coord_fixed()
+plt
+```
+
+# Cluster Analysis 
+```{r}
+d <- vegdist(CDATA, "bray") # Bray-Curtis default 
+clust <- hclust(d)          # This is agglomerative clustering - build the groups
+                            # from a single observation not split them apart...
+cut6 <- cutree(clust, 6)    # this cut number is arbitrary - we can pick what we
+                             # want. BUT having more than 7 groups is hard 
+                             # because of what you can visually see... play 
+                             # around and see what is most informative.
+
+
+```
+
+`cut6` is a vector with the cluster assignment of each sample, so we can
+merge it back into any of our other sample-oriented data structures.
+
+# Plot with Colors by Cluster
+```{r}
+plot_data <- plot_data %>%
+  mutate(cluster = factor(cut6))
+
+plt <- ggplot(data = plot_data, aes(MDS1, MDS2)) + 
+  geom_point(aes(color = cluster), size = 2.5) +
+  scale_color_viridis_d(option = 'C', name = 'Cluster') +
+  coord_fixed()
+plt
+```
+
+
+## Understanding `ordihull()`
+First, it appears `ordihull()` must be called after a plot object has been
+created.
+```{r error = TRUE}
+ordihull(NMDSE, groups = cut6, display = "sites")
+```
+
+So, we create a plot, then call `ordiplot()`, and see what we get.  
+The `ordihull()` helpfile is not very informative, saying only that functions
+"return the invisible plotting structure."  But what that means is that the
+`ordihull()` function returns information invisibly while it modifies a plot.
+If we can capture the returned plotting structure, we can examine and re-use it.
+
+```{r}
+plot(NMDSE, type = "n", display = "sites")
+hull <- ordihull(NMDSE, groups = cut6, display = "sites")
+```
+
+I learned that `vegan` is built largely on S3  classes, which are implemented as 
+named lists, so it's easy to find a starting point by looking at the names in
+the object returned by `ordihull()`.
+```{r}
+class(hull)
+names(hull)
+```
+
+I doubt it is a coincidence that the list has six objects and we defined six
+clusters.  We look at the first item in this list.
+
+```{r}
+class(hull[[1]])
+hull[[1]]
+```
+
+It's just an array containing the points of the vertexes of the polygons. Each 
+polygon is passed as an array of points.  We can work with that, although
+it is going to be easier to "flatten" the data structure.  
+
+This is a bit tricky, as we need to convert each array to a dataframe and append
+them, retaining their cluster identities.  This can be done in several ways.
+Here I convert the arrays to tibbles, then bind them into one tibble with
+`bind_rows()`, which conveniently allows you to label each entry with the source
+data frame (here the cluster number).
+
+```{r}
+hullsdfs <- map(hull, as_tibble) 
+hulls_df <- hullsdfs %>%
+  bind_rows(.id = 'Cluster')
+hulls_df
+```
+
+# Plot Clusters and  Convex Hulls
+```{r}
+plt <- ggplot(data = plot_data, aes(MDS1, MDS2)) + 
+  geom_point(aes(color = cluster), size = 2) +
+  geom_polygon(data=hulls_df,  
+               mapping = aes(x= NMDS1,y= NMDS2, group = Cluster), color = 'black', fill = NA) + 
+  scale_color_viridis_d(option = 'C', name = 'Cluster') +
+  coord_fixed()  #+
+  #theme(legend.position = c(0.9, 0.75),
+  #      legend.background = element_blank())
+plt
+```
+
+# Replot Environment Arrows
+```{r}
+plt <- ggplot(data = plot_data, aes(MDS1, MDS2)) + 
+  geom_point(aes(color = station), size = 2) +
+  geom_segment(data=scaled_arrows,  
+               mapping = aes(x=0,xend=NMDS1,y=0,yend=NMDS2),
+               arrow = arrow(length = unit(0.5, "cm")) ,colour="grey") + 
+  geom_text(data=scaled_arrows, 
+            mapping = aes(x=NMDS1,y=NMDS2,label=parameter),
+            size=5, nudge_x = -0.075, nudge_y = -0.075, hjust = 0)+
+  scale_color_viridis_d(option = 'D', name = 'Station') +
+  coord_fixed()  # +
+ # theme(legend.position = c(0.9, 0.75),
+ #       legend.background = element_blank())
+plt
+```
