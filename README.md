@@ -17,7 +17,7 @@ with some R coding issues. As she was preparing a manuscript for publication,
 she and Lasley Rasher again asked  for assistance with finalizing some graphics.
 
 ## The charge
-In e-mail, the Ambrose and Lasley Rasher asked me the following:
+In e-mail,  Ambrose and Lasley Rasher asked me the following:
 
 > These [two graphics] are actually the same data but these plots were made using 
 two different codes in R to highlight the groupings (fig 4) and the drivers of 

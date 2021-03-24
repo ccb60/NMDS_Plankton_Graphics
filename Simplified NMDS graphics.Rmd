@@ -1,7 +1,7 @@
 ---
-title: "Simplification and Revision of Ambrose Revision of NMDS Run 2/6/20"
+title: "Graphics Options for Ambrose et al. Plankton Comunity Composition Study"
 author: "Curtis C. Bohlen, Casco Bay Estuary Partnership"
-date: "3/22/2021"
+date: "3/24/2021"
 output:
   html_document:
     toc: true
@@ -15,61 +15,113 @@ output:
     src="https://www.cascobayestuary.org/wp-content/uploads/2014/04/logo_sm.jpg"
     style="position:absolute;top:10px;right:50px;" />
 
-
-# Load Libraries
-I simplified library calls here.  Many of the libraries are included in the 
-"tidyverse", and I don't usually use datatable, etc.  others appeear to not be 
-needed in the final analyses
-
-Note that you have to load MASS before the Tidyverse, because it has a function
-named `select`, which messes with many standard dplyr workflows, in ways that
-are not alwqys easy to identify.
-```{r}
-library(MASS)
-library(tidyverse)
-library(vegan)
-#library(labdsv)
-#library(data.table)
-library(readxl)
-#library(ggpubr)
-#library(emmeans)
-library(mvtnorm)
-
-
-#library(knitr)
-#library(testthat)
-library(reshape2) #need to turn data from long to wide
-#library(glmmTMB) #glmmTMB
-#library(grid) #needed to plot envfit vectors
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(fig.align = 'center',
+                      fig.width = 5, fig.height = 4,
+                      collapse = TRUE, comment = "#>")
 ```
 
-```{r}
-citation("vegan")
+# Introduction
+Erin Ambrose has been looking at species composition of plankton in 
+Penobscot Bay, Maine, working with Rachel Lasley Rasher, at University of 
+Southern Maine.
+
+Lasley Rasher is on the faculty at the University of Southern Maine, which also 
+houses the Casco Bay Estuary Partnership.  She has been kind enough to allow us 
+to work in her lab when we worked on some coastal nutrient monitoring projects.
+
+So, at Lasley Rasher's request, I helped Ambrose early in her graduate work
+with community analysis using nonmetric multidimensional scaling and cluster
+analysis, both supported by th excellent `vegan` package.
+
+> Jari Oksanen, F. Guillaume Blanchet, Michael Friendly, Roeland Kindt, Pierre
+   Legendre, Dan McGlinn, Peter R. Minchin, R. B. O'Hara, Gavin L. Simpson,
+   Peter Solymos, M. Henry H. Stevens, Eduard Szoecs and Helene Wagner (2020).
+   vegan: Community Ecology Package. R package version 2.5-7.
+   https://CRAN.R-project.org/package=vegan
+
+Recently, as Ambrose and Lasley Rasher were  preparing a manuscript for
+publication, they ran into problems making BAse R and `ggplot2` graphics look 
+similar, and they reached out to me again for some help.  
+
+To ensure my analysis and graphics are compatible with  theirs I started with 
+some of their existing analysis code (some of which I had helped develop more 
+than a year ago), and revised and simplified it. IN what follows, I include some
+commentary on coding alternatives.
+
+## The charge
+In e-mail, Ambrose and Lasley Rasher asked me the following:
+
+> These [two graphics] are actually the same data but these plots were made using 
+two different codes in R to highlight the groupings (fig 4) and the drivers of 
+those groupings (fig 5).
+
+>   Ideally, we would like to  
+    1. Make the scales match  
+    2. Keep the polygons in place in fig 5
+    3. Not sure how much we should worry about the color scheme matching? 
+
+## Initial Analysis of the Challenge
+The two figures from their manuscript, Fig 4 and Fig 5, were NMDS plots, with 
+one highlighting clusters of similar  species composition (by drawing polygons
+around each cluster) and the other highlighting environmental variables
+(by showing `envfit` vectors).  
+
+The problem was, the two graphics relied on different plotting tools, and so did
+not play well together.  Figure 4 was produced in "Base R" graphics, using plot 
+functions included in the `vegan` package.   In particular, it  relied on the
+`ordihull()` function.
+
+Figure 5 was constructed using the `ggplot2` graphic system, and included
+settings that force a 1 to 1 aspect ratio (as is appropriate for an NMDS plot).
+
+## Proposed Solution
+Most plotting functions invisibly return a data frame (or other R object)
+containing underlying plot coordinates.  An initial approach, therefore, was 
+to isolate the data from the `ordihull()` call from  Ambrose's  code, and
+figure out how to use it in `ggplot2` graphics.
+
+The help page for the `ordihull()` function says the following:
+
+>  Function ordihull and ordiellipse return invisibly an object that has a 
+   summary method that returns the coordinates of centroids and areas of the 
+   hulls or ellipses.
+
+That suggests a path forward.
+
+# Load Libraries
+```{r libraries}
+library(tidyverse)
+library(vegan)
+library(readxl)
+library(reshape2) #need to turn data from long to wide
+
 ```
 
 # Set Graphics Theme
 This sets `ggplot()`graphics for no background, no grid lines, etc. in a clean
 format suitable for (some) publications.  You can get a lot fancier here with
 setting graphic defaults, but this is a good starting point.
-```{r}
+```{r set_theme}
 theme_set(theme_classic())
 ```
 
 # Folder References
-```{r}
+I use folder references to allow limited indirection, thus making code from 
+GitHub repositories more likely to run "out of the box".
+```{r folder_refs}
 data_folder <- "Original_Data"
 ```
 
 # Input Data
-I revised the folder paths to fit with how I had files organized.  I also 
-dropped the call to `data.table()`, as unnecessary, as I work mostly with
-tibbles.
-
 ##  Environmental Data
 This code generates a fair number of warnings about date conversions, but these
-are for the time variable, which is inconsistently coded in the Excel file, and
-not a key part of the analysis here.
-```{r}
+are for the time variable, which is inconsistently coded in the source Excel
+file.  We never use the time variable in this code, so we can ignore the
+warnings. We suppress the warnings here, but that's bad practice until you have
+worked out all problems loading data.  Warnings often indicate a more serious 
+problem that needs addressing.
+```{r load_enviro_data, warning = FALSE}
 
 filename.in <- "penob.station.data EA 3.12.20.xlsx"
 file_path <- file.path(data_folder, filename.in)
@@ -97,11 +149,24 @@ station_data <- read_excel(file_path,
                                               "numeric", "numeric", "text")) %>%
   rename_with(~ gsub(" ", "_", .x)) %>%
   rename_with(~ gsub("\\.", "_", .x))
-station_data
+```
+
+Station names are arbitrary, and Ambrose expressed interest in renaming them
+from Stations @, 4, 5 and 8 to Stations 1,2,3,and 4.  We'll have to make the 
+same changes in other data too.
+
+The `factor()` function by default sorts levels before assigning numeric codes,
+so a convenient way to replace the existing station codes with sequential
+numbers is to create a factor and extract the numeric indicator values with 
+`as.numeric()`.
+```{r change_station_names_1}
+station_data <- station_data %>%
+  mutate(station = factor(as.numeric(factor(station))))
+head(station_data)
 ```
 
 ## Composition Data
-```{r}
+```{r load_composition_data}
 filename.in <- "Penobscot_Zooplankton and field data_EA_2.13.20.xlsx"
 file_path <- file.path(data_folder, filename.in)
 zoopl <- read_excel(file_path,
@@ -115,7 +180,13 @@ zoopl <- read_excel(file_path,
                                   "numeric", "numeric", "numeric")) %>%
 rename_with(~ gsub(" ", "_", .x)) %>%
   select(-c(`...20`:`...24`))
-zoopl
+```
+
+We rename stations here as well.  The code is similar.
+```{r change_station_names_2}
+zoopl <- zoopl %>%
+  mutate(STATION = factor(as.numeric(factor(STATION))))
+head(zoopl)
 ```
 
 ## Turn Data from Long to Wide
@@ -128,79 +199,121 @@ there is no reason to change it.
 This step generates a total abundance for each taxa by site and date.  I believe 
 this was necessary because the "raw" data reflected sampling of plankton one
 microscope slide at a time....
-```{r}
+```{r aggregate_zoopl_data}
 zoopl2 <- aggregate(CORRECTED_PERCENT_ABUNDANCE ~ NAME + DATE + STATION, 
                     data=zoopl, FUN=sum)
-zoopl2
+#head(zoopl2)
 ```
 
-This step pivots the table to "wide" format, with a column for each taxa. 
+
+The next  step pivots the table to "wide" format, with a column for each taxa. 
 
 It is interesting that this step is necessary.  Presumably it reflects the
 matrix format used for traditional community analysis, especially vegetation
 analysis.  A matrix format was used by a lot of historically important community 
 analysis code (like DECORANA).
-```{r}
+```{r long_to_wide}
 zoopw <- dcast(zoopl2, DATE + STATION ~ NAME, drop = TRUE, fill = 0)
-zoopw
+#head(zoopw)
 ```
-
 ## Matrix of Species for `vegan`
-The `vegan` package likes to work with a matrix of species occurrences.
-```{r}
+The `vegan` package likes to work with a matrix of species occurrences. Although 
+I the matrix can have rownames that provide sample identifiers, that was not
+done here.  Note that the "matrix" I produce here is really a data frame with
+nothing but numeric values.  While those are quite different data structures
+internally, `vegan` handles the conversion in the background.
+```{r make_cdata}
 CDATA <- zoopw[,-c(1,2)]
-
 ```
 
-We put everything else into a `header_data` file. The environmental data will go
-into a third data frame.
+We will put all our sample identifiers and environmental variables in other
+data frames that correspond row by row to the community data. Just remember
+when you drop a row from one data frame, you'll have to drop the same row
+from all related data frames! 
 
-Just remember when you drop a row from one you'll have to drop from all three 
-data frames! 
-```{r}
-header_data <- data.frame(station = factor(zoopw$STATION),
+First, we build a `header_data` file. The environmental data will go
+into a third data frame. We'll pick and chose which of those variables to
+work with later.
+
+I notice here that the Year, Month and Day factors were being constructed by
+pulling substrings.  That is interesting, as the DATE value in `zoopw` is 
+actually a POSIXct date value. I had forgotten that you could treat them as
+strings successfully. 
+
+## Header Data
+```{r make_header_data}
+header_data <- data.frame(station = zoopw$STATION,
                           date = zoopw$DATE,
-                          year = factor(substr(zoopw$DATE, 1,4)),
-                          month = factor(substr(zoopw$DATE, 6, 7)), 
-                          day = factor(substr(zoopw$DATE, 9, 10)))
-header_data
+                          year = factor(as.numeric(substr(zoopw$DATE, 1,4))),
+                          month = factor(as.numeric(substr(zoopw$DATE, 6, 7))), 
+                          day = factor(as.numeric(substr(zoopw$DATE, 9, 10))))
+head(header_data)
 ```
 
-Data sanity checks.  We should have no NAs, and row sums should all be 1, at
-least within reasonable rounding error.  
-```{r}
-anyNA(CDATA)
+I was concerned about behavior of the original code, if the sort order of
+factors were important. I don't think it is in this setting. In fact, except in
+some exploratory graphics, since deleted, we don't use those factors at all.  
+I'm not sure we need factors at all, since we do not use these values in models.
+We could have left these values as strings, which might minimize risk of
+confusion. Still, it's worth thinking about the issues this brings up.
 
+Pulling substrings returns a string.  Creating factors with `factor()` will
+(by default) create levels based on sorted values.  Here, those values are
+strings.  When strings are sorted, "10" sorts before "9", as its first character
+("1") sorts before "9".  To be specific, that means the month factor will sort
+as January, October, November, December, February..., while the "day" factor will
+sort as 1, 10 - 19, 2, 20-29, 3, 30-31, 4-9.
+
+To ensure proper sorting, I wrapped each of the `substr()` calls in
+`as.numeric()`. That way we build the sort orders on numeric values.As we don't
+model with these values, the distinction is probably not important here, but
+I like to be careful.
+
+One could also extract similar values (and some others, like julian day, which 
+is often useful for seasonal analysis) using date formats of the form:
+
+`year = factor(as.numeric(format(zoopw$DATE, format = '%Y')))`
+
+(Note the format command also returns a string, so it also needs to be wrapped
+in a `as.numeric()` call).
+
+## Data Sanity Checks 
+We should have no NAs, and row sums should all be 1, at least within reasonable
+rounding error.  
+```{r sanity_check}
+anyNA(CDATA)
 plot(rowSums(CDATA))
 ```
 
-# NDMS Analyses 
-## Version 1:  Autotransform is FALSE
-```{r}
+# NMDS Analyses 
+```{r nmds}
 NMDSE <- metaMDS(CDATA, autotransform = FALSE, k = 2, trymax = 75)
 NMDSE
 ```
 
 ## Plot
-```{r}
+```{r plot_nmds}
 plot(NMDSE, type = 't')
 ```
 
-#Adding Environmental Data
-```{r}
+# Adding Environmental Data
+I will want to use the names of these variables as labels in graphics later.
+I capitalize variable names here, so they will appear capitalized in graphics 
+without further action on my part.
+```{r build_env_data}
 envNMDS <- data.frame(NMDSE$points) %>% 
   rownames_to_column(var = "sample") %>%
-  mutate(station = header_data$station) %>%
-  mutate(month = header_data$month) %>%
-  mutate(year = header_data$year) %>%
-    mutate(temp = station_data$ave_temp_c) %>%
-    mutate(sal = station_data$ave_sal_psu) %>%
-    mutate(turb = station_data$ave_turb_ntu) %>%
+  mutate(Station = header_data$station) %>%
+  mutate(Month = header_data$month) %>%
+  mutate(Year = header_data$year) %>%
+    mutate(Temp = station_data$ave_temp_c) %>%
+    mutate(Sal = station_data$ave_sal_psu) %>%
+    mutate(Turb = station_data$ave_turb_ntu) %>%
     mutate(DOsat = station_data$ave_DO_Saturation) %>%
-    mutate(chl = station_data$ave_chl_microgperl) %>%
-    mutate(fish = station_data$Fish) %>%
+    mutate(Chl = station_data$ave_chl_microgperl) %>%
+    mutate(Fish = station_data$Fish) %>%
     mutate(RH = station_data$Herring)
-envNMDS
+head(envNMDS)
 ```
 
 # Using `envfit` to Estimate Correlations
@@ -208,9 +321,7 @@ I revised your code to call on the same ordination you were using elsewhere.
 You were calling on another NMDS object.  I believe it was one produced 
 by `isoMDS()` from `MASS`, not `metaMDS()` from `vegan`.  I'm not sure why that
 happened or whether it matters.
-
-
-```{r}
+```{r env_fit}
 ef <- envfit(NMDSE, envNMDS[,c(4:11,13)], permu = 999, na.rm = TRUE)
 ef
 ```
@@ -225,17 +336,16 @@ vector NMDS loading estimates, or their R squared values, so it does not matter.
 # Extracting Vector Information 
 The `envfit()` help page says the object returned by the function is a LIST with 
 three components.
-```{r}
+```{r what_is_envfit}
 class(ef)
 names(ef)
 ```
 
 The `ef` object is a `envfit` object, with C3 class, with three named 
 slots. The vector information we need to plot the environment arrows is
-available in `vectors`.  But that object is itself also an S3 Object, with
+available in `vectors`.  But that object is itself also an S3 object, with
 several named items.
-
-```{r}
+```{r what_is_vectorfit}
 v <- ef$vectors
 class(v)
 names(v)
@@ -244,8 +354,7 @@ names(v)
 The help page for `envfit()` tells us that the information we need for the 
 direction of the arrows is in the `arrows` component.  We are told that `arrows 
 contains "Arrow endpoints from vectorfit. The arrows are scaled to unit length."
-
-```{r}
+```{r what_is_arrows}
 class(v$arrows)
 v$arrows
 ```
@@ -253,16 +362,61 @@ v$arrows
 The information we need to determine the magnitude of those vectors is buried 
 in the `r` component of the `vectors` component. We scale each of the arrows 
 by the square root of the related  r squared value. (Following the strategy in 
-the code you shared with me).
-```{r}
+the code shared with me).
+
+```{r scaled_arrows}
 arrows <- v$arrows
 rsq    <- v$r
-scaled_arrows <- as_tibble(arrows*sqrt(rsq)) %>%  # I am actually a bit surprized this works....
+scaled_arrows <- as_tibble(arrows*sqrt(rsq)) %>%  
   mutate(parameter = rownames(arrows))
 ```
 
+I was actually a bit surprised that worked. I tend to work in dataframes, where 
+this would be impossible.  This works because both `arrows` and `rsq` are
+arrays.
+
+Internally, and array is just a vector with dimensions.
+
+When we multiply an array by a vector, R does not do matrix multiplication, but 
+multiplies element by element, recycling the shorter vector as needed.
+Since the number of rows in our array matches the number of values in the 
+vector, values line up, and we multiply rowwise.
+
+This gets messy for vectors and arrays that are NOT of compatible dimensions.
+Some examples to make that clearer:
+```{r how_vector_math_works_in_r}
+a <- 1:6
+dim(a) <- c(2,3)
+b <- c(1,2)
+c <- c(1,2,3)
+d <- c(1,2,3,4)
+cat('Compatible Dimensions: Vector length matches rows in array\n')
+a*b
+cat('Incompatible dimensions -- array values mutiplied by column, then row\n')
+a*c
+cat('If values are not divisible, extras from the shorter vector are dropped\n')
+a*d
+```
+
+While we are creating vectors, we also want to create points for placing the 
+annotations identifying each vector.  We want to space the labels so they are a
+fixed distance beyond the end of each vector.  We do that with a little vector 
+addition. What we want is to add a small length to each scaled 
+vector to offset the text.  Vector addition is just element wise addition.  We
+can pull values from the values in `arrows`, which are vectors scaled to unit
+length, as offsets from zero, which makes the math fairly easy.  Note that we
+may want that extra space to differ for plots srawn at different scales or with
+different fonts.
+```{r anotation_positions_1}
+scale_factor = 0.125   # Fraction of unit length beyond arrow to place annotation
+
+scaled_arrows <- scaled_arrows %>%
+  mutate(ann_xpos = NMDS1 + arrows[,1]*scale_factor,
+         ann_ypos = NMDS2 + arrows[,2] *scale_factor)
+```
+
 # Plotting `envfit()` Information
-```{r}
+```{r build_plot_data}
 plot_data <- data.frame(NMDSE$points) %>%
   rownames_to_column(var = "sample") %>%
   mutate(station = header_data$station) %>%
@@ -270,22 +424,22 @@ plot_data <- data.frame(NMDSE$points) %>%
   mutate(year = header_data$year)
 ```
 
-```{r}
+```{r draft_arrow+plot}
 plt <- ggplot(data = plot_data, aes(MDS1, MDS2)) + 
   geom_point(aes(color = station), size = 2.5) +
   geom_segment(data=scaled_arrows,  
                mapping = aes(x=0,xend=NMDS1,y=0,yend=NMDS2),
-               arrow = arrow(length = unit(0.5, "cm")) ,colour="grey") + 
+               arrow = arrow(length = unit(0.5, "cm")) ,colour="grey40") + 
   geom_text(data=scaled_arrows, 
-            mapping = aes(x=NMDS1,y=NMDS2,label=parameter),
-            size=5, nudge_x = -0.075, nudge_y = -0.075, hjust = 0)+
+            mapping = aes(x=ann_xpos,y=ann_ypos,label=parameter),
+            size=4, nudge_x =0, nudge_y = 0, hjust = .5)+
   scale_color_viridis_d(option = 'C', name = 'Station') +
   coord_fixed()
 plt
 ```
 
 # Cluster Analysis 
-```{r}
+```{r cluster_analysis}
 d <- vegdist(CDATA, "bray") # Bray-Curtis default 
 clust <- hclust(d)          # This is agglomerative clustering - build the groups
                             # from a single observation not split them apart...
@@ -300,8 +454,8 @@ cut6 <- cutree(clust, 6)    # this cut number is arbitrary - we can pick what we
 `cut6` is a vector with the cluster assignment of each sample, so we can
 merge it back into any of our other sample-oriented data structures.
 
-# Plot with Colors by Cluster
-```{r}
+# Plot Clusters
+```{r plot_clusters}
 plot_data <- plot_data %>%
   mutate(cluster = factor(cut6))
 
@@ -312,11 +466,14 @@ plt <- ggplot(data = plot_data, aes(MDS1, MDS2)) +
 plt
 ```
 
+# Drawing Minimum Bounding Polygons
+the function `ordihul()` draws minimum bounding polygons around points in each
+cluster.
 
 ## Understanding `ordihull()`
-First, it appears `ordihull()` must be called after a plot object has been
+It appears `ordihull()` must be called after a plot object has been
 created.
-```{r error = TRUE}
+```{r ordihull_error, error = TRUE}
 ordihull(NMDSE, groups = cut6, display = "sites")
 ```
 
@@ -326,15 +483,15 @@ The `ordihull()` helpfile is not very informative, saying only that functions
 `ordihull()` function returns information invisibly while it modifies a plot.
 If we can capture the returned plotting structure, we can examine and re-use it.
 
-```{r}
+```{r ordihull}
 plot(NMDSE, type = "n", display = "sites")
 hull <- ordihull(NMDSE, groups = cut6, display = "sites")
 ```
 
-I learned that `vegan` is built largely on S3  classes, which are implemented as 
+`vegan` is built largely on S3  classes, which are implemented as 
 named lists, so it's easy to find a starting point by looking at the names in
 the object returned by `ordihull()`.
-```{r}
+```{r what_is_ordihull}
 class(hull)
 names(hull)
 ```
@@ -342,54 +499,229 @@ names(hull)
 I doubt it is a coincidence that the list has six objects and we defined six
 clusters.  We look at the first item in this list.
 
-```{r}
+```{r check_first_ordihull_item}
 class(hull[[1]])
 hull[[1]]
 ```
 
 It's just an array containing the points of the vertexes of the polygons. Each 
 polygon is passed as an array of points.  We can work with that, although
-it is going to be easier to "flatten" the data structure.  
+it is going to be easier to "flatten" the data structure.
 
-This is a bit tricky, as we need to convert each array to a dataframe and append
-them, retaining their cluster identities.  This can be done in several ways.
-Here I convert the arrays to tibbles, then bind them into one tibble with
+This is a bit tricky, as we need to convert each array to a data frame and
+append them, retaining their cluster identities.  This can be done in several
+ways. Here I convert the arrays to tibbles, then bind them into one tibble with
 `bind_rows()`, which conveniently allows you to label each entry with the source
 data frame (here the cluster number).
 
-```{r}
+```{r build_hulls_df}
 hullsdfs <- map(hull, as_tibble) 
 hulls_df <- hullsdfs %>%
   bind_rows(.id = 'Cluster')
 hulls_df
 ```
 
-# Plot Clusters and  Convex Hulls
-```{r}
+# Final Graphics
+The instructions to authors suggests figure widths should line up with columns,
+and proposes figure widths should be: 39, 84, 129, or 174 mm wide, with height 
+not to exceed 235 mm. Presumably that corresponds to 1,2,3,or 4 columns wide? 
+
+39 mm is about one and one half inches, which his quite small, so we will make
+the 84 mm and 129 mm wide options. Unfortunately RMarkdown / `knitr` likes
+figure dimensions in inches. 84 mm is close to 3.3 inches. 129 mm is close to 5
+inches.  I hope those values are close enough.
+
+Note that ggplot sometimes scales plots in odd ways when you specify both
+figure height and width, especially if the relative scaling is constrained by 
+fixed axis limits, as here , with `coord_fixed()`. I provide both for 
+consistency.  In my experience, otherwise you get surprises in  eps / pdf 
+output.
+
+Also, in my experience, graphics produced by different graphics devices often
+look somewhat different.  In this case, I think the EPS graphics have problems
+placing the letters from the Y axis label, although it is hard to tell, because
+without graphics software that handles EPS files well, I can just barely view
+the EPS files.  Things look crisper in PDF, perhaps only because PDF viewers 
+from Adobe are fairly sophisticated.
+
+## Plot Clusters and  Convex Hulls
+```{r plot_clusters_small, fig.width = 3.3, fig.height = 2.75}
+plt <- ggplot(data = plot_data, aes(MDS1, MDS2)) + 
+  geom_point(aes(color = cluster), size = 1.25) +
+  geom_polygon(data=hulls_df,  
+               mapping = aes(x= NMDS1,y= NMDS2, group = Cluster),
+               color = 'black', fill = NA) + 
+  scale_color_viridis_d(option = 'C', name = 'Cluster') +
+  
+  # Adjust size of legend
+  theme(legend.key.size = unit(0.35, 'cm')) +
+  
+  # Set aspect ratio (defaults to 1)
+  coord_fixed() 
+plt
+ggsave('clusters_84.eps', device = 'eps', width = 3.3, height = 2.75)
+ggsave('clusters_84.tif', device = 'tiff', width = 3.3, height = 2.75)
+ggsave('clusters_84.eps', device = cairo_ps, width = 3.3, height = 2.75)
+ggsave('clusters_84.pdf', device = cairo_pdf, width = 3.3, height = 2.75)
+
+```
+
+```{r plot_clusters_large, fig.width = 5}
 plt <- ggplot(data = plot_data, aes(MDS1, MDS2)) + 
   geom_point(aes(color = cluster), size = 2) +
   geom_polygon(data=hulls_df,  
-               mapping = aes(x= NMDS1,y= NMDS2, group = Cluster), color = 'black', fill = NA) + 
+               mapping = aes(x= NMDS1,y= NMDS2, group = Cluster),
+               color = 'black', fill = NA) + 
   scale_color_viridis_d(option = 'C', name = 'Cluster') +
-  coord_fixed()  #+
-  #theme(legend.position = c(0.9, 0.75),
-  #      legend.background = element_blank())
+  
+  # Adjust size of legend
+  theme(legend.key.size = unit(0.35, 'cm')) +
+  
+  # Set aspect ratio (defaults to 1)
+  coord_fixed() 
 plt
+
+ggsave('clusters_129_alt.eps', device = "eps", width = 5, height = 4)
+ggsave('clusters_129.tif', device = "tiff", width = 5, height = 4)
+ggsave('clusters_129.eps', device = cairo_ps, width = 5, height = 4)
+ggsave('clusters_129.pdf', device = cairo_pdf, width = 5, height = 4)
 ```
 
-# Replot Environment Arrows
-```{r}
+## Plot Environment Arrows
+```{r anotation_positions_2}
+scale_factor = 0.11   # Fraction of unit length beyond arrow to place annotation
+
+scaled_arrows <- scaled_arrows %>%
+  mutate(ann_xpos = NMDS1 + arrows[,1]*scale_factor,
+         ann_ypos = NMDS2 + arrows[,2] *scale_factor)
+```
+
+```{r plot_arrows_small, fig.width = 3.3}
+plt <- ggplot(data = plot_data, aes(MDS1, MDS2)) + 
+  geom_point(aes(color = station), size = 1.25) +
+  geom_segment(data=scaled_arrows,  
+               mapping = aes(x=0, xend = NMDS1, y = 0, yend = NMDS2),
+               arrow = arrow(length = unit(0.2, "cm")) ,colour="grey40") + 
+  geom_text(data=scaled_arrows, 
+            mapping = aes(x = ann_xpos, y = ann_ypos,label=parameter),
+            size=2.5, hjust = 0.5)+
+  scale_color_viridis_d(option = 'D', direction = -1, name = 'Station') +
+  
+  # Adjust size of legend
+  theme(legend.key.size = unit(0.35, 'cm')) +
+  
+  # Set aspect ratio (defaults to 1)
+  coord_fixed()
+plt
+
+ggsave('arrows_84_alt.eps', device = "eps", width = 3.3, height = 2.5)
+ggsave('arrows_84.tif', device = "tiff", width = 3.3, height = 2.5)
+ggsave('arrows_84.eps', device = cairo_ps, width = 3.3, height = 2.5)
+ggsave('arrows_84.pdf', device = cairo_pdf, width = 3.3, height = 2.5)
+```
+
+```{r anotation_positions_3}
+scale_factor = 0.125   # Fraction of unit length beyond arrow to place annotation
+
+scaled_arrows <- scaled_arrows %>%
+  mutate(ann_xpos = NMDS1 + arrows[,1]*scale_factor,
+         ann_ypos = NMDS2 + arrows[,2] *scale_factor)
+```
+
+```{r plot_arrows_large, fig.width = 5}
 plt <- ggplot(data = plot_data, aes(MDS1, MDS2)) + 
   geom_point(aes(color = station), size = 2) +
   geom_segment(data=scaled_arrows,  
-               mapping = aes(x=0,xend=NMDS1,y=0,yend=NMDS2),
-               arrow = arrow(length = unit(0.5, "cm")) ,colour="grey") + 
+               mapping = aes(x=0, xend = NMDS1, y = 0, yend = NMDS2),
+               arrow = arrow(length = unit(0.25, "cm")) ,colour="grey40") + 
   geom_text(data=scaled_arrows, 
-            mapping = aes(x=NMDS1,y=NMDS2,label=parameter),
-            size=5, nudge_x = -0.075, nudge_y = -0.075, hjust = 0)+
-  scale_color_viridis_d(option = 'D', name = 'Station') +
-  coord_fixed()  # +
- # theme(legend.position = c(0.9, 0.75),
- #       legend.background = element_blank())
+            mapping = aes(x = ann_xpos, y = ann_ypos,label=parameter),
+            size=3.5, hjust = 0.5)+
+  scale_color_viridis_d(option = 'D', direction = -1, name = 'Station') +
+  
+  # Adjust size of legend
+  theme(legend.key.size = unit(0.35, 'cm')) +
+  
+  # Set aspect ratio (defaults to 1)
+  coord_fixed()
 plt
+
+ggsave('arrows_129_alt.eps', device = "eps", width = 5, height = 4)
+ggsave('arrows_129.tif', device = "tiff", width = 5, height = 4)
+ggsave('arrows_129.eps', device = cairo_ps, width = 5, height = 4)
+ggsave('arrows_129.pdf', device = cairo_pdf, width = 5, height = 4)
 ```
+
+## Combined Graphics
+Lasley-Rasher asked whether it would be possible to combine the graphics into
+one.  This poses a design challenge, as we then have three different types of 
+information on the graphic, and we need to figure out how to code all that
+information in an understandable way. 
+
+```{r combined_graphic, fig.width = 5}
+plt <- ggplot(data = plot_data, aes(MDS1, MDS2)) + 
+  geom_polygon(data=hulls_df,  
+               mapping = aes(x= NMDS1,y= NMDS2, group = Cluster),
+               colour = "gray75",
+               fill = NA,
+              # alpha = 0.2
+               ) + 
+  
+  geom_point(aes(color = station), size = 2) +
+  
+  geom_segment(data=scaled_arrows,  
+               mapping = aes(x=0,xend=NMDS1,y=0,yend=NMDS2),
+               arrow = arrow(length = unit(0.5, "cm")) ,colour="gray15") + 
+ 
+  scale_color_viridis_d(option = 'D', direction = -1, name = 'Station') +
+  #scale_fill_viridis_d(option = 'D', name = 'Cluster') +
+  
+  # Adjust size of legend
+  theme(legend.key.size = unit(0.35, 'cm')) +
+  
+  # Set aspect ratio (defaults to 1)
+  coord_fixed()  #+
+  #theme(legend.position = c(0.9, 0.75),
+  #      legend.background = element_blank())
+
+plt +
+   geom_text(data=scaled_arrows, 
+            mapping = aes(x=ann_xpos,y=ann_ypos,label=parameter), colour = "black",
+            size=3.25, hjust = 0.5)
+```
+
+## Add Annotations for the Clusters
+I can think of one moderately convenient way to label the polygons 
+"automatically".  That is to pull the top point in each cluster, and place the
+labels near that point.  otherwise, we may want to place them manually.
+
+```{r build_labs}
+labs <- hulls_df %>%
+  group_by(Cluster) %>%
+  filter(NMDS2 == max(NMDS2))
+labs
+```
+
+
+### One Possibility...
+```{r plot_combined, fig.width = 5, fig.height = 4}
+plt +
+  geom_text(data = labs, 
+            mapping = aes(x = NMDS1,y = NMDS2, label = Cluster), 
+            colour = "gray60", size=4, 
+            nudge_x = 0.075, nudge_y = 0.075, hjust = 0) +
+   geom_text(data=scaled_arrows, 
+            mapping = aes(x = ann_xpos, y = ann_ypos, label = parameter),
+            colour = "black", size = 3.25, hjust = 0.5)
+ggsave('both_129_alt.eps', device = "eps", width = 5, height = 4)
+ggsave('both_129.tif', device = "tiff", width = 5, height = 4)
+ggsave('both_129.eps', device = cairo_ps, width = 5, height = 4)
+ggsave('both_129.pdf', device = cairo_pdf, width = 5, height = 4)
+
+```
+
+
+
+
+
+
