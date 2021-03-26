@@ -13,7 +13,7 @@ output:
 
 <img
     src="https://www.cascobayestuary.org/wp-content/uploads/2014/04/logo_sm.jpg"
-    style="position:absolute;top:10px;right:50px;" />
+    style="position:absolute;top:100px;right:50px;" />
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(fig.align = 'center',
@@ -55,10 +55,9 @@ In e-mail, Ambrose and Lasley Rasher asked me the following:
 > These [two graphics] are actually the same data but these plots were made using 
 two different codes in R to highlight the groupings (fig 4) and the drivers of 
 those groupings (fig 5).
-
 >   Ideally, we would like to  
     1. Make the scales match  
-    2. Keep the polygons in place in fig 5
+    2. Keep the polygons in place in fig 5  
     3. Not sure how much we should worry about the color scheme matching? 
 
 ## Initial Analysis of the Challenge
@@ -152,13 +151,14 @@ station_data <- read_excel(file_path,
 ```
 
 Station names are arbitrary, and Ambrose expressed interest in renaming them
-from Stations @, 4, 5 and 8 to Stations 1,2,3,and 4.  We'll have to make the 
-same changes in other data too.
+from Stations 2, 4, 5 and 8 to Stations 1,2,3,and 4.
 
 The `factor()` function by default sorts levels before assigning numeric codes,
 so a convenient way to replace the existing station codes with sequential
 numbers is to create a factor and extract the numeric indicator values with 
 `as.numeric()`.
+
+We'll have to make the same changes in other data too.
 ```{r change_station_names_1}
 station_data <- station_data %>%
   mutate(station = factor(as.numeric(factor(station))))
@@ -238,15 +238,17 @@ work with later.
 I notice here that the Year, Month and Day factors were being constructed by
 pulling substrings.  That is interesting, as the DATE value in `zoopw` is 
 actually a POSIXct date value. I had forgotten that you could treat them as
-strings successfully. 
+strings successfully. (I also label the month factor, for later graphics).
 
 ## Header Data
 ```{r make_header_data}
-header_data <- data.frame(station = zoopw$STATION,
+header_data <- tibble(station = zoopw$STATION,
                           date = zoopw$DATE,
                           year = factor(as.numeric(substr(zoopw$DATE, 1,4))),
                           month = factor(as.numeric(substr(zoopw$DATE, 6, 7))), 
-                          day = factor(as.numeric(substr(zoopw$DATE, 9, 10))))
+                          day = factor(as.numeric(substr(zoopw$DATE, 9, 10)))) %>%
+  mutate(month = factor(month, levels = 1:12, labels = month.abb))
+
 head(header_data)
 ```
 
@@ -297,7 +299,7 @@ plot(NMDSE, type = 't')
 ```
 
 # Adding Environmental Data
-I will want to use the names of these variables as labels in graphics later.
+I want to use the names of these variables as labels in graphics later.
 I capitalize variable names here, so they will appear capitalized in graphics 
 without further action on my part.
 ```{r build_env_data}
@@ -316,7 +318,7 @@ envNMDS <- data.frame(NMDSE$points) %>%
 head(envNMDS)
 ```
 
-# Using `envfit` to Estimate Correlations
+## Using `envfit` to Estimate Correlations
 I revised your code to call on the same ordination you were using elsewhere.
 You were calling on another NMDS object.  I believe it was one produced 
 by `isoMDS()` from `MASS`, not `metaMDS()` from `vegan`.  I'm not sure why that
@@ -333,7 +335,7 @@ I also observe that Year is included in the model, but is NOT
 significant.  However, dropping Year from the model has no effect on the 
 vector NMDS loading estimates, or their R squared values, so it does not matter.
 
-# Extracting Vector Information 
+## Extracting Vector Information 
 The `envfit()` help page says the object returned by the function is a LIST with 
 three components.
 ```{r what_is_envfit}
@@ -415,7 +417,7 @@ scaled_arrows <- scaled_arrows %>%
          ann_ypos = NMDS2 + arrows[,2] *scale_factor)
 ```
 
-# Plotting `envfit()` Information
+## Plotting `envfit()` Information
 ```{r build_plot_data}
 plot_data <- data.frame(NMDSE$points) %>%
   rownames_to_column(var = "sample") %>%
@@ -454,7 +456,7 @@ cut6 <- cutree(clust, 6)    # this cut number is arbitrary - we can pick what we
 `cut6` is a vector with the cluster assignment of each sample, so we can
 merge it back into any of our other sample-oriented data structures.
 
-# Plot Clusters
+## Plot Clusters
 ```{r plot_clusters}
 plot_data <- plot_data %>%
   mutate(cluster = factor(cut6))
@@ -658,6 +660,7 @@ one.  This poses a design challenge, as we then have three different types of
 information on the graphic, and we need to figure out how to code all that
 information in an understandable way. 
 
+### Colored  by Station
 ```{r combined_graphic, fig.width = 5}
 plt <- ggplot(data = plot_data, aes(MDS1, MDS2)) + 
   geom_polygon(data=hulls_df,  
@@ -690,7 +693,7 @@ plt +
             size=3.25, hjust = 0.5)
 ```
 
-## Add Annotations for the Clusters
+#### Add Annotations for the Clusters
 I can think of one moderately convenient way to label the polygons 
 "automatically".  That is to pull the top point in each cluster, and place the
 labels near that point.  otherwise, we may want to place them manually.
@@ -702,8 +705,6 @@ labs <- hulls_df %>%
 labs
 ```
 
-
-### One Possibility...
 ```{r plot_combined, fig.width = 5, fig.height = 4}
 plt +
   geom_text(data = labs, 
@@ -720,8 +721,41 @@ ggsave('both_129.pdf', device = cairo_pdf, width = 5, height = 4)
 
 ```
 
+### Colored by Month
+This was added as a working graphic to highlight the seasonal pattern in 
+community composition. 
+```{r combined_graphic_2, fig.width = 5}
+plt <- ggplot(data = plot_data, aes(MDS1, MDS2)) + 
+  geom_polygon(data=hulls_df,  
+               mapping = aes(x= NMDS1,y= NMDS2, group = Cluster),
+               colour = "gray75",
+               fill = NA,
+              # alpha = 0.2
+               ) + 
+  
+  geom_point(aes(color = month, shape = station), size = 2) +
+  
+  geom_segment(data=scaled_arrows,  
+               mapping = aes(x=0,xend=NMDS1,y=0,yend=NMDS2),
+               arrow = arrow(length = unit(0.5, "cm")) ,colour="gray15") + 
+ 
+  scale_color_viridis_d(option = 'D', direction = -1, name = 'Month') +
+  scale_shape(name = 'Station') +
+  #scale_fill_viridis_d(option = 'D', name = 'Cluster') +
+  
+  # Adjust size of legend
+  theme(legend.key.size = unit(0.35, 'cm')) +
+  
+  # Set aspect ratio (defaults to 1)
+  coord_fixed()  #+
+  #theme(legend.position = c(0.9, 0.75),
+  #      legend.background = element_blank())
 
-
+plt +
+   geom_text(data=scaled_arrows, 
+            mapping = aes(x=ann_xpos,y=ann_ypos,label=parameter), colour = "black",
+            size=3.25, hjust = 0.5)
+```
 
 
 
