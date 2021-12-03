@@ -3,10 +3,9 @@ title: "Graphics Options for Ambrose et al. Plankton Comunity Composition Study"
 author: "Curtis C. Bohlen, Casco Bay Estuary Partnership"
 date: "3/24/2021"
 output:
-  html_document:
+  pdf_document:
     toc: true
-    toc_depth: 3
-    toc_float: true
+    toc_depth: 2
     fig_width: 5
     fig_height: 4
 ---
@@ -27,7 +26,7 @@ Penobscot Bay, Maine, working with Rachel Lasley Rasher, at University of
 Southern Maine.
 
 Lasley Rasher is on the faculty at the University of Southern Maine, which also 
-houses the Casco Bay Estuary Partnership.  She has been kind enough to allow us 
+houses the Casco Bay Estuary Partnership. She has been kind enough to allow us 
 to work in her lab when we worked on some coastal nutrient monitoring projects.
 
 So, at Lasley Rasher's request, I helped Ambrose early in her graduate work
@@ -42,9 +41,9 @@ analysis, both supported by th excellent `vegan` package.
 
 Recently, as Ambrose and Lasley Rasher were  preparing a manuscript for
 publication, they ran into problems making BAse R and `ggplot2` graphics look 
-similar, and they reached out to me again for some help.  
+similar, and they reached out to me again for some help. 
 
-To ensure my analysis and graphics are compatible with  theirs I started with 
+To ensure my analysis and graphics are compatible with theirs I started with 
 some of their existing analysis code (some of which I had helped develop more 
 than a year ago), and revised and simplified it. IN what follows, I include some
 commentary on coding alternatives.
@@ -64,11 +63,11 @@ those groupings (fig 5).
 The two figures from their manuscript, Fig 4 and Fig 5, were NMDS plots, with 
 one highlighting clusters of similar  species composition (by drawing polygons
 around each cluster) and the other highlighting environmental variables
-(by showing `envfit` vectors).  
+(by showing `envfit` vectors). 
 
 The problem was, the two graphics relied on different plotting tools, and so did
-not play well together.  Figure 4 was produced in "Base R" graphics, using plot 
-functions included in the `vegan` package.   In particular, it  relied on the
+not play well together. Figure 4 was produced in "Base R" graphics, using plot 
+functions included in the `vegan` package. In particular, it  relied on the
 `ordihull()` function.
 
 Figure 5 was constructed using the `ggplot2` graphic system, and included
@@ -76,7 +75,7 @@ settings that force a 1 to 1 aspect ratio (as is appropriate for an NMDS plot).
 
 ## Proposed Solution
 Most plotting functions invisibly return a data frame (or other R object)
-containing underlying plot coordinates.  An initial approach, therefore, was 
+containing underlying plot coordinates. An initial approach, therefore, was 
 to isolate the data from the `ordihull()` call from  Ambrose's  code, and
 figure out how to use it in `ggplot2` graphics.
 
@@ -99,7 +98,7 @@ library(reshape2) #need to turn data from long to wide
 
 # Set Graphics Theme
 This sets `ggplot()`graphics for no background, no grid lines, etc. in a clean
-format suitable for (some) publications.  You can get a lot fancier here with
+format suitable for (some) publications. You can get a lot fancier here with
 setting graphic defaults, but this is a good starting point.
 ```{r set_theme}
 theme_set(theme_classic())
@@ -116,9 +115,9 @@ data_folder <- "Original_Data"
 ##  Environmental Data
 This code generates a fair number of warnings about date conversions, but these
 are for the time variable, which is inconsistently coded in the source Excel
-file.  We never use the time variable in this code, so we can ignore the
+file. We never use the time variable in this code, so we can ignore the
 warnings. We suppress the warnings here, but that's bad practice until you have
-worked out all problems loading data.  Warnings often indicate a more serious 
+worked out all problems loading data. Warnings often indicate a more serious 
 problem that needs addressing.
 ```{r load_enviro_data, warning = FALSE}
 
@@ -182,7 +181,7 @@ rename_with(~ gsub(" ", "_", .x)) %>%
   select(-c(`...20`:`...24`))
 ```
 
-We rename stations here as well.  The code is similar.
+We rename stations here as well. The code is similar.
 ```{r change_station_names_2}
 zoopl <- zoopl %>%
   mutate(STATION = factor(as.numeric(factor(STATION))))
@@ -191,12 +190,12 @@ head(zoopl)
 
 ## Turn Data from Long to Wide
 I no longer use the `reshape2` package (`dcast()` is from `reshape2`) for this
-type of data reorganization.  Grouped tibbles in the tidyverse work well instead
-of the `aggregate()` command.  For pivoting long to wide, the tidyverse's newer
+type of data reorganization. Grouped tibbles in the tidyverse work well instead
+of the `aggregate()` command. For pivoting long to wide, the tidyverse's newer
 `pivot_wider()` function is fairly intuitive. But this code still works, so
 there is no reason to change it.
 
-This step generates a total abundance for each taxa by site and date.  I believe 
+This step generates a total abundance for each taxa by site and date. I believe 
 this was necessary because the "raw" data reflected sampling of plankton one
 microscope slide at a time....
 ```{r aggregate_zoopl_data}
@@ -208,9 +207,9 @@ zoopl2 <- aggregate(CORRECTED_PERCENT_ABUNDANCE ~ NAME + DATE + STATION,
 
 The next  step pivots the table to "wide" format, with a column for each taxa. 
 
-It is interesting that this step is necessary.  Presumably it reflects the
+It is interesting that this step is necessary. Presumably it reflects the
 matrix format used for traditional community analysis, especially vegetation
-analysis.  A matrix format was used by a lot of historically important community 
+analysis. A matrix format was used by a lot of historically important community 
 analysis code (like DECORANA).
 ```{r long_to_wide}
 zoopw <- dcast(zoopl2, DATE + STATION ~ NAME, drop = TRUE, fill = 0)
@@ -218,9 +217,9 @@ zoopw <- dcast(zoopl2, DATE + STATION ~ NAME, drop = TRUE, fill = 0)
 ```
 ## Matrix of Species for `vegan`
 The `vegan` package likes to work with a matrix of species occurrences. Although 
-I the matrix can have rownames that provide sample identifiers, that was not
-done here.  Note that the "matrix" I produce here is really a data frame with
-nothing but numeric values.  While those are quite different data structures
+the matrix can have rownames that provide sample identifiers, that was not
+done here. Note that the "matrix" I produce here is really a data frame with
+nothing but numeric values. While those are quite different data structures
 internally, `vegan` handles the conversion in the background.
 ```{r make_cdata}
 CDATA <- zoopw[,-c(1,2)]
@@ -236,7 +235,7 @@ into a third data frame. We'll pick and chose which of those variables to
 work with later.
 
 I notice here that the Year, Month and Day factors were being constructed by
-pulling substrings.  That is interesting, as the DATE value in `zoopw` is 
+pulling substrings. That is interesting, as the DATE value in `zoopw` is 
 actually a POSIXct date value. I had forgotten that you could treat them as
 strings successfully. (I also label the month factor, for later graphics).
 
@@ -254,15 +253,15 @@ head(header_data)
 
 I was concerned about behavior of the original code, if the sort order of
 factors were important. I don't think it is in this setting. In fact, except in
-some exploratory graphics, since deleted, we don't use those factors at all.  
+some exploratory graphics (since deleted) we don't use those factors at all. 
 I'm not sure we need factors at all, since we do not use these values in models.
 We could have left these values as strings, which might minimize risk of
 confusion. Still, it's worth thinking about the issues this brings up.
 
-Pulling substrings returns a string.  Creating factors with `factor()` will
-(by default) create levels based on sorted values.  Here, those values are
-strings.  When strings are sorted, "10" sorts before "9", as its first character
-("1") sorts before "9".  To be specific, that means the month factor will sort
+Pulling substrings returns a string. Creating factors with `factor()` will
+(by default) create levels based on sorted values. Here, those values are
+strings. When strings are sorted, "10" sorts before "9", as its first character
+("1") sorts before "9". To be specific, that means the month factor will sort
 as January, October, November, December, February..., while the "day" factor will
 sort as 1, 10 - 19, 2, 20-29, 3, 30-31, 4-9.
 
@@ -281,7 +280,7 @@ in a `as.numeric()` call).
 
 ## Data Sanity Checks 
 We should have no NAs, and row sums should all be 1, at least within reasonable
-rounding error.  
+rounding error. 
 ```{r sanity_check}
 anyNA(CDATA)
 plot(rowSums(CDATA))
@@ -320,19 +319,19 @@ head(envNMDS)
 
 ## Using `envfit` to Estimate Correlations
 I revised your code to call on the same ordination you were using elsewhere.
-You were calling on another NMDS object.  I believe it was one produced 
-by `isoMDS()` from `MASS`, not `metaMDS()` from `vegan`.  I'm not sure why that
+You were calling on another NMDS object. I believe it was one produced 
+by `isoMDS()` from `MASS`, not `metaMDS()` from `vegan`. I'm not sure why that
 happened or whether it matters.
 ```{r env_fit}
 ef <- envfit(NMDSE, envNMDS[,c(4:11,13)], permu = 999, na.rm = TRUE)
 ef
 ```
-I note 13 observations deleted due to missingness.  Most of those must be the
-2013 data.  Presumably, they were deleted because they lack some of the
-predictor variables.  
+I note 13 observations deleted due to missingness. Most of those must be the
+2013 data. Presumably, they were deleted because they lack some of the
+predictor variables. 
 
 I also observe that Year is included in the model, but is NOT 
-significant.  However, dropping Year from the model has no effect on the 
+significant. However, dropping Year from the model has no effect on the 
 vector NMDS loading estimates, or their R squared values, so it does not matter.
 
 ## Extracting Vector Information 
@@ -345,7 +344,7 @@ names(ef)
 
 The `ef` object is a `envfit` object, with C3 class, with three named 
 slots. The vector information we need to plot the environment arrows is
-available in `vectors`.  But that object is itself also an S3 object, with
+available in `vectors`. But that object is itself also an S3 object, with
 several named items.
 ```{r what_is_vectorfit}
 v <- ef$vectors
@@ -354,7 +353,7 @@ names(v)
 ```
 
 The help page for `envfit()` tells us that the information we need for the 
-direction of the arrows is in the `arrows` component.  We are told that `arrows 
+direction of the arrows is in the `arrows` component. We are told that `arrows 
 contains "Arrow endpoints from vectorfit. The arrows are scaled to unit length."
 ```{r what_is_arrows}
 class(v$arrows)
@@ -374,7 +373,7 @@ scaled_arrows <- as_tibble(arrows*sqrt(rsq)) %>%
 ```
 
 I was actually a bit surprised that worked. I tend to work in dataframes, where 
-this would be impossible.  This works because both `arrows` and `rsq` are
+this would be impossible. This works because both `arrows` and `rsq` are
 arrays.
 
 Internally, and array is just a vector with dimensions.
@@ -401,12 +400,12 @@ a*d
 ```
 
 While we are creating vectors, we also want to create points for placing the 
-annotations identifying each vector.  We want to space the labels so they are a
-fixed distance beyond the end of each vector.  We do that with a little vector 
+annotations identifying each vector. We want to space the labels so they are a
+fixed distance beyond the end of each vector. We do that with a little vector 
 addition. What we want is to add a small length to each scaled 
-vector to offset the text.  Vector addition is just element wise addition.  We
+vector to offset the text. Vector addition is just element wise addition. We
 can pull values from the values in `arrows`, which are vectors scaled to unit
-length, as offsets from zero, which makes the math fairly easy.  Note that we
+length, as offsets from zero, which makes the math fairly easy. Note that we
 may want that extra space to differ for plots srawn at different scales or with
 different fonts.
 ```{r anotation_positions_1}
@@ -479,7 +478,7 @@ created.
 ordihull(NMDSE, groups = cut6, display = "sites")
 ```
 
-So, we create a plot, then call `ordiplot()`, and see what we get.  
+So, we create a plot, then call `ordiplot()`, and see what we get. 
 The `ordihull()` helpfile is not very informative, saying only that functions
 "return the invisible plotting structure."  But what that means is that the
 `ordihull()` function returns information invisibly while it modifies a plot.
@@ -499,7 +498,7 @@ names(hull)
 ```
 
 I doubt it is a coincidence that the list has six objects and we defined six
-clusters.  We look at the first item in this list.
+clusters. We look at the first item in this list.
 
 ```{r check_first_ordihull_item}
 class(hull[[1]])
@@ -507,11 +506,11 @@ hull[[1]]
 ```
 
 It's just an array containing the points of the vertexes of the polygons. Each 
-polygon is passed as an array of points.  We can work with that, although
+polygon is passed as an array of points. We can work with that, although
 it is going to be easier to "flatten" the data structure.
 
 This is a bit tricky, as we need to convert each array to a data frame and
-append them, retaining their cluster identities.  This can be done in several
+append them, retaining their cluster identities. This can be done in several
 ways. Here I convert the arrays to tibbles, then bind them into one tibble with
 `bind_rows()`, which conveniently allows you to label each entry with the source
 data frame (here the cluster number).
@@ -531,19 +530,19 @@ not to exceed 235 mm. Presumably that corresponds to 1,2,3,or 4 columns wide?
 39 mm is about one and one half inches, which his quite small, so we will make
 the 84 mm and 129 mm wide options. Unfortunately RMarkdown / `knitr` likes
 figure dimensions in inches. 84 mm is close to 3.3 inches. 129 mm is close to 5
-inches.  I hope those values are close enough.
+inches. I hope those values are close enough.
 
 Note that ggplot sometimes scales plots in odd ways when you specify both
 figure height and width, especially if the relative scaling is constrained by 
 fixed axis limits, as here , with `coord_fixed()`. I provide both for 
-consistency.  In my experience, otherwise you get surprises in  eps / pdf 
+consistency. In my experience, otherwise you get surprises in  eps / pdf 
 output.
 
 Also, in my experience, graphics produced by different graphics devices often
-look somewhat different.  In this case, I think the EPS graphics have problems
+look somewhat different. In this case, I think the EPS graphics have problems
 placing the letters from the Y axis label, although it is hard to tell, because
 without graphics software that handles EPS files well, I can just barely view
-the EPS files.  Things look crisper in PDF, perhaps only because PDF viewers 
+the EPS files. Things look crisper in PDF, perhaps only because PDF viewers 
 from Adobe are fairly sophisticated.
 
 ## Plot Clusters and  Convex Hulls
@@ -656,7 +655,7 @@ ggsave('arrows_129.pdf', device = cairo_pdf, width = 5, height = 4)
 
 ## Combined Graphics
 Lasley-Rasher asked whether it would be possible to combine the graphics into
-one.  This poses a design challenge, as we then have three different types of 
+one. This poses a design challenge, as we then have three different types of 
 information on the graphic, and we need to figure out how to code all that
 information in an understandable way. 
 
@@ -695,8 +694,8 @@ plt +
 
 #### Add Annotations for the Clusters
 I can think of one moderately convenient way to label the polygons 
-"automatically".  That is to pull the top point in each cluster, and place the
-labels near that point.  otherwise, we may want to place them manually.
+"automatically". That is to pull the top point in each cluster, and place the
+labels near that point. otherwise, we may want to place them manually.
 
 ```{r build_labs}
 labs <- hulls_df %>%
