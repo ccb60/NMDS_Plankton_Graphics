@@ -5,16 +5,16 @@ Exploring different ways to improve graphics summarizing data on planton communi
 ## Contents
 Data and starting code were received from Erin Ambrose, in March of 2021.  Erin 
 was completing graduate work looking at species composition of plankton in 
-Penobscot Bay, Maine,working with Rachel Lasley Rasher, at University of 
+Penobscot Bay, Maine, working with Rachel Lasley Rasher, at University of 
 Southern Maine.
 
 Lasley Rasher is on the faculty at the University of Southern Maine, which also 
 houses the Casco Bay Estuary Partnership.  She has been kind enough to allow us 
 to work in her lab when we worked on some coastal nutrient monitoring projects.
 
-So, at LAsley Rasher's request, I helped Ambrose early on in her graduate work
+So, at Lasley Rasher's request, I helped Ambrose early on in her graduate work
 with some R coding issues. As she was preparing a manuscript for publication,
-she and Lasley Rasher again asked  for assistance with finalizing some graphics.
+she and Lasley Rasher again asked for assistance with finalizing some graphics.
 
 ## The charge
 In e-mail, Ambrose and Lasley Rasher asked me the following:
@@ -37,8 +37,8 @@ The problem was, the two graphics relied on different plotting tools, and so did
 not play well together.
 
 Looking at the two draft graphics, it appeared that Figure 4 was produced in 
-"Base R" graphics, using plot functions included in the `vegan` package.   In 
-particular, it  was the default output of the `ordihull()` function.
+"Base R" graphics, using plot functions included in the `vegan` package. In 
+particular, it was the default output of the `ordihull()` function.
 
 Figure 5 was constructed, more or less by hand, using the `ggplot2` graphic
 system.
@@ -55,5 +55,5 @@ The help page for the `ordihull()` function says the following:
    summary method that returns the coordinates of centroids and areas of the 
    hulls or ellipses.
 
-That suggests the path forward.
+That suggested the path forward.
 
